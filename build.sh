@@ -15,16 +15,19 @@ output=$(realpath -m "$5")
 ndk=${ANDROID_NDK_HOME:?Set ANDROID_NDK_HOME}
 cxx=$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android29-clang++
 up=$repo
+export CCACHE_BASEDIR="$repo"
 src=$repo/lsteamclient
 revision=$(git -C "$repo" rev-parse HEAD)
 mkdir -p "$output/aarch64-unix" "$output/aarch64-windows" "$output/objects"
-aarch64-linux-gnu-g++ -O2 -std=gnu++17 -I"$up/steam-bridge" \
-    -I"$src/steamworks_sdk_154" "$up/steam-bridge/server.cpp" -ldl \
-    -o "$output/lsteambridge-server"
+ccache aarch64-linux-gnu-g++ -c -O2 -std=gnu++17 -I"$up/steam-bridge" \
+    -I"$src/steamworks_sdk_154" "-ffile-prefix-map=$repo=/usr/src/arlinux/steamworks" \
+    "$up/steam-bridge/server.cpp" -o "$output/server.o"
+aarch64-linux-gnu-g++ "$output/server.o" -ldl -o "$output/lsteambridge-server"
 export AR_STEAM_SRC=$src AR_STEAM_OUTPUT=$output AR_STEAM_WINE=$wine AR_STEAM_UP=$up AR_STEAM_CXX=$cxx
 find "$src" -maxdepth 1 \( -name 'cppISteam*.cpp' -o -name 'unix*.cpp' \) -print0 |
     xargs -0 -n 1 -P "${JOBS:-6}" bash -c '
-    "$AR_STEAM_CXX" -c -fPIC -O2 -std=gnu++17 -pthread \
+    ccache "$AR_STEAM_CXX" -c -fPIC -O2 -std=gnu++17 -pthread \
+      "-ffile-prefix-map=$AR_STEAM_UP=/usr/src/arlinux/steamworks" \
       -Wno-pragma-pack -Wno-format-extra-args -D__WINESRC__ -DNOMINMAX -DWINE_UNIX_LIB \
       -DSTEAM_API_EXPORTS -Dprivate=public -Dprotected=public -DLSTEAM_BRIDGE_PROXY \
       -I"$AR_STEAM_WINE/include" -I"${BIONIC_INCLUDE:?Set BIONIC_INCLUDE}" \
@@ -54,8 +57,13 @@ for arch in i686 x86_64 arm64ec; do
       -L"${WINE_IMPORT_LIBS:?Set WINE_IMPORT_LIBS to the matching PE lib/wine directory}/$imports" \
       -o "$output/$folder/lsteamclient.dll" "$src"/*.c "$src/lsteamclient.spec" -luser32 -lws2_32
 done
-aarch64-w64-mingw32-clang -O2 -municode "$repo/steam-launch.c" \
-    -ladvapi32 -o "$output/aarch64-windows/steam.exe"
+aarch64-w64-mingw32-clang -c -O2 -municode \
+    "-ffile-prefix-map=$repo=/usr/src/arlinux/steamworks" \
+    "$repo/steam-launch.c" -o "$output/steam-launch.o"
+aarch64-w64-mingw32-clang "$output/steam-launch.o" -municode -ladvapi32 -o "$output/aarch64-windows/steam.exe"
+# Compiler objects are cached by ccache, not shipped in component capsules.
+rm -r -- "$output/objects"
+rm -- "$output/server.o" "$output/steam-launch.o"
 cp "$up/steam-bridge/LICENSE" "$output/LICENSE.bridge"
 cp "$src/LICENSE" "$output/LICENSE.lsteamclient"
 printf '%s\n' "$revision" > "$output/upstream-revision"
