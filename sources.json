@@ -1,0 +1,13 @@
+{
+  "bridge": {
+    "repository": "https://github.com/moio9/steam-arm64-termux",
+    "revision": "9782c5154cf6217661b05bed30b160556f8c7885"
+  },
+  "frontend": {
+    "repository": "https://github.com/ValveSoftware/Proton",
+    "revision": "db9e6ffbf24a95b104fb699dd62532c70a2f9a51",
+    "path": "lsteamclient",
+    "sdk": "steamworks_sdk_154"
+  },
+  "adaptation": "moio9 standalone Bionic bridge and ARLinux arena / SteamUser023 fixes are committed in this tree; builds do not apply patches or install Proton."
+}
